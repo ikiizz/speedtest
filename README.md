@@ -1,1 +1,3 @@
-# speedtest
+# Simple internet speedtest
+
+URL:
