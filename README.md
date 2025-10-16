@@ -1,3 +1,3 @@
 # Simple internet speedtest
 
-URL:
+URL: https://ikiizz.github.io/speedtest
