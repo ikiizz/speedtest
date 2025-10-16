@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+  <meta charset="UTF-8">
+  <title>Internet SpeedTest</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      background: #f0f2f5;
+      color: #222;
+      padding: 20px;
+    }
+    h1 { color: #007bff; }
+    button {
+      padding: 12px 24px;
+      margin: 20px auto;
+      font-size: 18px;
+      border-radius: 6px;
+      border: none;
+      background-color: #007bff;
+      color: white;
+      cursor: pointer;
+      display: block;
+    }
+    button:hover { background-color: #0056b3; }
+    .results { margin-top: 20px; font-size: 18px; }
+    .progress-bar {
+      width: 90%;
+      max-width: 400px;
+      height: 25px;
+      background: #ddd;
+      margin: 10px auto;
+      border-radius: 5px;
+      overflow: hidden;
+    }
+    .progress {
+      height: 100%;
+      background: #28a745;
+      width: 0%;
+      transition: width 0.3s;
+    }
+    .chart-container {
+      width: 100%;
+      max-width: 600px;
+      margin: 30px auto;
+    }
+    canvas {
+      width: 100% !important;
+      height: 300px !important;
+      touch-action: auto;
+    }
+    @media (max-width: 600px) {
+      .chart-container {
+        max-width: 100%;
+        margin: 20px auto;
+      }
+      canvas {
+        height: 200px !important;
+      }
+    }
+  </style>
+</head>
+<body>
+
+<button id="startTest">Start test</button>
+
+<div class="results">
+  <p>Download: <span id="downloadSpeed">0</span> Mbps</p>
+  <p>Upload: <span id="uploadSpeed">0</span> Mbps</p>
+  <p>Ping: <span id="ping">0</span> ms | Jitter: <span id="jitter">0</span> ms</p>
+</div>
+
+<div class="progress-bar">
+  <div class="progress" id="progressBar"></div>
+</div>
+
+<div class="chart-container">
+  <canvas id="speedChart"></canvas>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+const startBtn = document.getElementById('startTest');
+const downloadEl = document.getElementById('downloadSpeed');
+const uploadEl = document.getElementById('uploadSpeed');
+const pingEl = document.getElementById('ping');
+const jitterEl = document.getElementById('jitter');
+const progressBar = document.getElementById('progressBar');
+const ctx = document.getElementById('speedChart').getContext('2d');
+
+let chart = new Chart(ctx, {
+  type: 'line',
+  data: {
+    labels: [],
+    datasets: [
+      {
+        label: 'Download Mbps',
+        data: [],
+        borderColor: '#007bff',
+        backgroundColor: 'rgba(0,123,255,0.1)',
+        fill: true,
+        tension: 0.4
+      },
+      {
+        label: 'Upload Mbps',
+        data: [],
+        borderColor: '#28a745',
+        backgroundColor: 'rgba(40,167,69,0.1)',
+        fill: true,
+        tension: 0.4
+      }
+    ]
+  },
+  options: {
+    responsive: true,
+    animation: {
+      duration: 500,
+      easing: 'easeOutQuart'
+    },
+    interaction: {
+      mode: 'nearest',
+      intersect: false
+    },
+    plugins: {
+      tooltip: {
+        enabled: true,
+        callbacks: {
+          label: function(context) {
+            const label = context.dataset.label || '';
+            const value = context.parsed.y;
+            return `${label}: ${value} Mbps`;
+          }
+        }
+      }
+    },
+    scales: {
+      x: {
+        title: { display: true, text: 'Progress' }
+      },
+      y: {
+        title: { display: true, text: 'Mbps' },
+        beginAtZero: true
+      }
+    }
+  }
+});
+
+async function measurePingJitter(serverUrl, count = 5) {
+  let pings = [];
+  for (let i = 0; i < count; i++) {
+    const start = performance.now();
+    try {
+      await fetch(serverUrl, { method: 'HEAD', cache: 'no-store' });
+    } catch (e) {}
+    const end = performance.now();
+    pings.push(end - start);
+    await new Promise(r => setTimeout(r, 200));
+  }
+  const avgPing = pings.reduce((a,b)=>a+b,0)/pings.length;
+  const jitter = pings.map(p => Math.abs(p - avgPing)).reduce((a,b)=>a+b,0)/pings.length;
+  return { ping: avgPing.toFixed(0), jitter: jitter.toFixed(0) };
+}
+
+function simulateSpeedTest() {
+  return new Promise(resolve => {
+    let progress = 0;
+    let downloadData = [];
+    let uploadData = [];
+    let labels = [];
+    const interval = setInterval(() => {
+      progress += 10;
+      progressBar.style.width = progress + '%';
+
+      let download = (Math.random() * 100 + 50).toFixed(2);
+      let upload = (Math.random() * 50 + 20).toFixed(2);
+
+      downloadEl.textContent = download;
+      uploadEl.textContent = upload;
+
+      downloadData.push(download);
+      uploadData.push(upload);
+      labels.push(progress + "%");
+
+      chart.data.labels = labels;
+      chart.data.datasets[0].data = downloadData;
+      chart.data.datasets[1].data = uploadData;
+      chart.update();
+
+      if(progress >= 100){
+        clearInterval(interval);
+        resolve();
+      }
+    }, 500);
+  });
+}
+
+startBtn.addEventListener('click', async () => {
+  downloadEl.textContent = '0';
+  uploadEl.textContent = '0';
+  pingEl.textContent = '0';
+  jitterEl.textContent = '0';
+  progressBar.style.width = '0%';
+  chart.data.labels = [];
+  chart.data.datasets[0].data = [];
+  chart.data.datasets[1].data = [];
+  chart.update();
+
+  const serverUrl = "http://www.speedtest.com.sg"; // Singapore
+
+  const { ping, jitter } = await measurePingJitter(serverUrl);
+  pingEl.textContent = ping;
+  jitterEl.textContent = jitter;
+
+  await simulateSpeedTest();
+});
+</script>
+
+</body>
+</html>
